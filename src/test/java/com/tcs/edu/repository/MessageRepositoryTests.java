@@ -13,7 +13,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
-public class InMemoryMessageRepositoryTests {
+public class MessageRepositoryTests {
     private final MessageRepository storage = new InMemoryMessageRepositoryImpl();
     private final String testMessageContent = "Test Message";
 
