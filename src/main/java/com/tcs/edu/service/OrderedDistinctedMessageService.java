@@ -8,6 +8,7 @@ import com.tcs.edu.domain.Message;
 import com.tcs.edu.repository.MessageRepository;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * {@code OrderedDistinctedMessageService} processes decorated messages with typography and severity labels to storage.
@@ -18,6 +19,10 @@ import java.util.*;
 public final class OrderedDistinctedMessageService extends ValidatedMessageService implements MessageService {
     private final MessageDecorator decorator;
     private final MessageRepository repository;
+    /**
+     * <code>messageCount</code> stores the proceeded line number
+     */
+    private final AtomicInteger messageCount = new AtomicInteger(1);
 
     /**
      * @param decorator  {@link MessageDecorator} specific addition to decorate process
@@ -105,6 +110,7 @@ public final class OrderedDistinctedMessageService extends ValidatedMessageServi
 
     /**
      * Put decorated messages to storage (i.e. repository)
+     * Side effect on global {@link #messageCount} - increment for each message passed in.
      *
      * @param messages - message to be stored in repository
      */
@@ -112,7 +118,7 @@ public final class OrderedDistinctedMessageService extends ValidatedMessageServi
         for (Message message : messages) {
             message = new SeverityMessageDecorator().decorate(message);
             message = decorator.decorate(message);
-            message = new TypographicMessageDecorator().decorate(message);
+            message = new TypographicMessageDecorator(messageCount.getAndIncrement()).decorate(message);
             repository.create(message);
         }
     }
