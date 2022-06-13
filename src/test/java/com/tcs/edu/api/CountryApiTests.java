@@ -66,7 +66,7 @@ public class CountryApiTests {
     }
 
     @Test
-    @DisplayName("Get country not found")
+    @DisplayName("Get nonexistent country")
     public void checkCountryGotUnsuccessfully() {
         cleanUp();
         when().get(country, testCountryId).then().statusCode(404);
@@ -84,7 +84,7 @@ public class CountryApiTests {
     }
 
     @Test
-    @DisplayName("Update country not found")
+    @DisplayName("Update nonexistent country")
     public void checkCountryUpdatedUnsuccessfully() {
         cleanUp();
         given(testCountryUpdateRequest)
@@ -95,7 +95,7 @@ public class CountryApiTests {
     }
 
     @Test
-    @DisplayName("Create country not found")
+    @DisplayName("Create nonexistent country")
     public void checkCountryPostedSuccessfully() {
         cleanUp();
         testCountryId = given()
@@ -112,7 +112,7 @@ public class CountryApiTests {
     }
 
     @Test
-    @DisplayName("Create existed country")
+    @DisplayName("Create existed country (w\\ error)")
     public void checkCountryPostedUnsuccessfully() {
         given(testCountryCreateRequest)
                 .when()
