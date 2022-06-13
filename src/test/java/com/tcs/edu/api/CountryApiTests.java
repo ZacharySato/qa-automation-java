@@ -2,7 +2,9 @@ package com.tcs.edu.api;
 
 import io.restassured.RestAssured;
 import io.restassured.authentication.PreemptiveBasicAuthScheme;
+import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
+import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.*;
 
 import static io.restassured.RestAssured.*;
@@ -11,7 +13,9 @@ import static org.hamcrest.Matchers.*;
 public class CountryApiTests {
     private static final String country = "/api/countries/{id}";
     private static final String countries = "/api/countries/";
-    private String testCountryName = "10";
+    private RequestSpecification testCountryCreateRequest;
+    private RequestSpecification testCountryUpdateRequest;
+    private String testCountryName;
     private Integer testCountryId;
 
     @BeforeAll
@@ -29,15 +33,24 @@ public class CountryApiTests {
 
     @BeforeEach
     public void setUp() {
-        testCountryId = given()
-                .contentType(ContentType.JSON)
-                .body("{\"countryName\": \"" + testCountryName + "\"}")
+        testCountryId = given(testCountryCreateRequest)
                 .when()
                 .post(countries)
                 .then()
                 .extract()
                 .path("id");
-        System.out.println(testCountryId);
+
+        testCountryName = "10";
+        testCountryCreateRequest = new RequestSpecBuilder()
+                .setContentType(ContentType.JSON)
+                .setBody("{\"countryName\": \"" + testCountryName + "\"}")
+                .build();
+
+        testCountryName = "20";
+        testCountryUpdateRequest = new RequestSpecBuilder()
+                .setContentType(ContentType.JSON)
+                .setBody("{\"countryName\": \"" + testCountryName + "\",\"id\": " + testCountryId + "}")
+                .build();
     }
 
     @AfterEach
@@ -46,10 +59,45 @@ public class CountryApiTests {
     }
 
     @Test
-    @DisplayName("Create country")
+    @DisplayName("Get country if exists")
+    public void checkCountryGotSuccessfully() {
+        when().get(country, testCountryId).then().statusCode(200).body("countryName", is(testCountryName));
+    }
+
+    @Test
+    @DisplayName("Get country if not exists")
+    public void checkCountryGotUnsuccessfully() {
+        cleanUp();
+        when().get(country, testCountryId).then().statusCode(404);
+    }
+
+    @Test
+    @DisplayName("Update country if exists")
+    public void checkCountryUpdatedSuccessfully() {
+        given(testCountryUpdateRequest)
+                .when()
+                .put(country, testCountryId)
+                .then()
+                .statusCode(200)
+                .body("countryName", is(testCountryName));
+    }
+
+    @Test
+    @DisplayName("Update country if not exists")
+    public void checkCountryUpdatedUnsuccessfully() {
+        cleanUp();
+        given(testCountryUpdateRequest)
+                .when()
+                .put(country, testCountryId)
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    @DisplayName("Create country if not exists")
     public void checkCountryPostedSuccessfully() {
         cleanUp();
-        testCountryName = "20";
+        testCountryName = "30";
         testCountryId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"countryName\": \"" + testCountryName + "\"}")
@@ -58,38 +106,26 @@ public class CountryApiTests {
                 .then()
                 .statusCode(201)
                 .body("id", not(empty()))
+                .body("countryName", is(testCountryName))
                 .extract()
                 .path("id");
     }
 
-
     @Test
-    @DisplayName("Get country")
-    public void checkCountryGotSuccessfully() {
-        when().get(country, testCountryId)
-                .then()
-                .statusCode(200)
-                .body("countryName", is(testCountryName));
-    }
-
-
-    @Test
-    @DisplayName("Update country")
-    public void checkCountryUpdatedSuccessfully() {
-        testCountryName = "30";
-        given()
-                .contentType(ContentType.JSON)
-                .body("{\"countryName\": \"" + testCountryName + "\",\"id\": " + testCountryId + "}")
+    @DisplayName("Create country if exists")
+    public void checkCountryPostedUnsuccessfully() {
+        given(testCountryCreateRequest)
                 .when()
-                .patch(country, testCountryId)
+                .post(countries)
                 .then()
-                .statusCode(200)
-                .body("countryName", is(testCountryName));
+                .statusCode(500);
     }
 
     @Test
-    @DisplayName("Delete country")
+    @DisplayName("Delete country if exists")
     public void checkCountryDeletedSuccessfully() {
         when().delete(country, testCountryId).then().statusCode(204);
+        when().get(country, testCountryId).then().statusCode(404);
     }
 }
+
