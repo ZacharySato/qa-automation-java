@@ -10,13 +10,17 @@ import org.junit.jupiter.api.*;
 import java.sql.*;
 import java.util.Random;
 
-import static io.restassured.RestAssured.*;
+import static io.restassured.RestAssured.given;
+import static io.restassured.RestAssured.when;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 public class CountryApiTests {
     private static final String COUNTRY_PATH = "/api/countries/{id}";
     private static final String COUNTRIES_PATH = "/api/countries/";
     private static Connection connection;
+    private PreparedStatement sql;
+    private ResultSet queryResult;
     private RequestSpecification countryUpdateRequest;
     private String testCountryName;
     private String testCountryNameUpdated;
@@ -55,13 +59,13 @@ public class CountryApiTests {
         testCountryNameUpdated = randomCountryName();
 
         //создание с генерированным ключом
-        PreparedStatement sql = connection.prepareStatement(
+        sql = connection.prepareStatement(
                 "INSERT INTO country(country_name) VALUES(?)",
                 Statement.RETURN_GENERATED_KEYS
         );
         sql.setString(1, testCountryName);
         sql.executeUpdate();
-        ResultSet queryResult = sql.getGeneratedKeys();
+        queryResult = sql.getGeneratedKeys();
         queryResult.next();
         testCountryId = queryResult.getInt("id");
 
@@ -69,7 +73,6 @@ public class CountryApiTests {
                 .setContentType(ContentType.JSON)
                 .setBody("{\"countryName\": \"" + testCountryNameUpdated + "\",\"id\": " + testCountryId + "}")
                 .build();
-
     }
 
     @AfterEach
@@ -101,16 +104,18 @@ public class CountryApiTests {
                 .statusCode(404);
     }
 
-
     @Test
     @DisplayName("Update existed country")
-    public void checkCountryUpdatedSuccessfully() {
+    public void checkCountryUpdatedSuccessfully() throws SQLException {
         given(countryUpdateRequest)
                 .when()
                 .put(COUNTRY_PATH, testCountryId)
                 .then()
                 .statusCode(200)
                 .body("countryName", is(testCountryNameUpdated));
+        countrySelectByIdQuery();
+        queryResult.next();
+        assertThat(queryResult.getString("country_name"), equalTo(testCountryNameUpdated));
     }
 
     @Test
@@ -140,6 +145,10 @@ public class CountryApiTests {
                 .body("countryName", is(testCountryName))
                 .extract()
                 .path("id");
+
+        countrySelectByIdQuery();
+        assertThat(queryResult.next(), is(true));
+        assertThat(queryResult.getString("country_name"), equalTo(testCountryName));
     }
 
     @Test
@@ -156,15 +165,30 @@ public class CountryApiTests {
 
     @Test
     @DisplayName("Delete existed country")
-    public void checkCountryDeletedSuccessfully() {
+    public void checkCountryDeletedSuccessfully() throws SQLException {
         when()
                 .delete(COUNTRY_PATH, testCountryId)
                 .then()
                 .statusCode(204);
+
+        countrySelectByIdQuery();
+        assertThat(queryResult.next(), is(false));
+    }
+
+    @Test
+    @DisplayName("Delete nonexistent country")
+    public void checkCountryDeletedUnSuccessfully() throws SQLException {
+        cleanUp();
         when()
-                .get(COUNTRY_PATH, testCountryId)
+                .delete(COUNTRY_PATH, testCountryId)
                 .then()
                 .statusCode(404);
+    }
+
+    private void countrySelectByIdQuery() throws SQLException {
+        sql = connection.prepareStatement("SELECT country_name FROM country WHERE id = ?");
+        sql.setInt(1, testCountryId);
+        queryResult = sql.executeQuery();
     }
 
     private char randomLetter() {
