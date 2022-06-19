@@ -7,13 +7,17 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.*;
 
-import static io.restassured.RestAssured.*;
+import java.sql.*;
+import java.util.Random;
+
+import static io.restassured.RestAssured.given;
+import static io.restassured.RestAssured.when;
 import static org.hamcrest.Matchers.*;
 
 public class CountryApiTests {
-    private static final String country = "/api/countries/{id}";
-    private static final String countries = "/api/countries/";
-    private RequestSpecification testCountryCreateRequest;
+    private static final String COUNTRY_PATH = "/api/countries/{id}";
+    private static final String COUNTRIES_PATH = "/api/countries/";
+    private static Connection connection;
     private RequestSpecification testCountryUpdateRequest;
     private String testCountryName;
     private String testCountryNameUpdated;
@@ -32,52 +36,75 @@ public class CountryApiTests {
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
     }
 
+    @BeforeAll
+    public static void connect() throws SQLException {
+        connection = DriverManager.getConnection(
+                "jdbc:postgresql://localhost/app-db",
+                "app-db-admin",
+                "P@ssw0rd"
+        );
+    }
+
+    @AfterAll
+    public static void disconnect() throws SQLException {
+        connection.close();
+    }
+
     @BeforeEach
-    public void setUp() {
-        testCountryName = "10";
-        testCountryCreateRequest = new RequestSpecBuilder()
-                .setContentType(ContentType.JSON)
-                .setBody("{\"countryName\": \"" + testCountryName + "\"}")
-                .build();
+    public void setUp() throws SQLException {
+        testCountryName = randomCountryName();
+        testCountryNameUpdated = randomCountryName();
+        testCountryId = 101;
 
-        testCountryId = given(testCountryCreateRequest)
-                .when()
-                .post(countries)
-                .then()
-                .extract()
-                .path("id");
-
-        testCountryNameUpdated = "20";
         testCountryUpdateRequest = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
                 .setBody("{\"countryName\": \"" + testCountryNameUpdated + "\",\"id\": " + testCountryId + "}")
                 .build();
+
+        PreparedStatement newCountry = connection.prepareStatement(
+                "INSERT INTO country(id,country_name) VALUES(?,?)"
+        );
+        newCountry.setInt(1, testCountryId);
+        newCountry.setString(2, testCountryName);
+        newCountry.executeUpdate();
     }
 
     @AfterEach
-    public void cleanUp() {
-        delete(country, testCountryId);
+    public void cleanUp() throws SQLException {
+        PreparedStatement sql = connection.prepareStatement(
+                "DELETE FROM public.country WHERE id = ?"
+        );
+        sql.setInt(1, testCountryId);
+        sql.executeUpdate();
     }
 
     @Test
     @DisplayName("Get existed country")
     public void checkCountryGotSuccessfully() {
-        when().get(country, testCountryId).then().statusCode(200).body("countryName", is(testCountryName));
+        when()
+                .get(COUNTRY_PATH, testCountryId)
+                .then()
+                .statusCode(200)
+                .body("countryName", is(testCountryName));
     }
 
     @Test
     @DisplayName("Get nonexistent country")
-    public void checkCountryGotUnsuccessfully() {
+    public void checkCountryGotUnsuccessfully() throws SQLException {
         cleanUp();
-        when().get(country, testCountryId).then().statusCode(404);
+        when()
+                .get(COUNTRY_PATH, testCountryId)
+                .then()
+                .statusCode(404);
     }
+
 
     @Test
     @DisplayName("Update existed country")
     public void checkCountryUpdatedSuccessfully() {
         given(testCountryUpdateRequest)
                 .when()
-                .put(country, testCountryId)
+                .put(COUNTRY_PATH, testCountryId)
                 .then()
                 .statusCode(200)
                 .body("countryName", is(testCountryNameUpdated));
@@ -85,24 +112,25 @@ public class CountryApiTests {
 
     @Test
     @DisplayName("Update nonexistent country")
-    public void checkCountryUpdatedUnsuccessfully() {
+    public void checkCountryUpdatedUnsuccessfully() throws SQLException {
         cleanUp();
         given(testCountryUpdateRequest)
                 .when()
-                .put(country, testCountryId)
+                .put(COUNTRY_PATH, testCountryId)
                 .then()
                 .statusCode(400);
     }
 
+
     @Test
     @DisplayName("Create nonexistent country")
-    public void checkCountryPostedSuccessfully() {
+    public void checkCountryPostedSuccessfully() throws SQLException {
         cleanUp();
         testCountryId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"countryName\": \"" + testCountryName + "\"}")
                 .when()
-                .post(countries)
+                .post(COUNTRIES_PATH)
                 .then()
                 .statusCode(201)
                 .body("id", not(empty()))
@@ -114,9 +142,11 @@ public class CountryApiTests {
     @Test
     @DisplayName("Create existed country (w\\ error)")
     public void checkCountryPostedUnsuccessfully() {
-        given(testCountryCreateRequest)
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"countryName\": \"" + testCountryName + "\"}")
                 .when()
-                .post(countries)
+                .post(COUNTRIES_PATH)
                 .then()
                 .statusCode(500);
     }
@@ -124,8 +154,22 @@ public class CountryApiTests {
     @Test
     @DisplayName("Delete existed country")
     public void checkCountryDeletedSuccessfully() {
-        when().delete(country, testCountryId).then().statusCode(204);
-        when().get(country, testCountryId).then().statusCode(404);
+        when()
+                .delete(COUNTRY_PATH, testCountryId)
+                .then()
+                .statusCode(204);
+        when()
+                .get(COUNTRY_PATH, testCountryId)
+                .then()
+                .statusCode(404);
+    }
+
+    private char randomLetter() {
+        return (char) (new Random().nextInt(26) + 'A');
+    }
+
+    private String randomCountryName() {
+        return String.format("%s%s", randomLetter(), randomLetter());
     }
 }
 
