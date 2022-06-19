@@ -10,15 +10,14 @@ import org.junit.jupiter.api.*;
 import java.sql.*;
 import java.util.Random;
 
-import static io.restassured.RestAssured.given;
-import static io.restassured.RestAssured.when;
+import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
 
 public class CountryApiTests {
     private static final String COUNTRY_PATH = "/api/countries/{id}";
     private static final String COUNTRIES_PATH = "/api/countries/";
     private static Connection connection;
-    private RequestSpecification testCountryUpdateRequest;
+    private RequestSpecification countryUpdateRequest;
     private String testCountryName;
     private String testCountryNameUpdated;
     private Integer testCountryId;
@@ -54,25 +53,29 @@ public class CountryApiTests {
     public void setUp() throws SQLException {
         testCountryName = randomCountryName();
         testCountryNameUpdated = randomCountryName();
-        testCountryId = 101;
 
-        testCountryUpdateRequest = new RequestSpecBuilder()
+        //создание с генерированным ключом
+        PreparedStatement sql = connection.prepareStatement(
+                "INSERT INTO country(country_name) VALUES(?)",
+                Statement.RETURN_GENERATED_KEYS
+        );
+        sql.setString(1, testCountryName);
+        sql.executeUpdate();
+        ResultSet queryResult = sql.getGeneratedKeys();
+        queryResult.next();
+        testCountryId = queryResult.getInt("id");
+
+        countryUpdateRequest = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
                 .setBody("{\"countryName\": \"" + testCountryNameUpdated + "\",\"id\": " + testCountryId + "}")
                 .build();
 
-        PreparedStatement newCountry = connection.prepareStatement(
-                "INSERT INTO country(id,country_name) VALUES(?,?)"
-        );
-        newCountry.setInt(1, testCountryId);
-        newCountry.setString(2, testCountryName);
-        newCountry.executeUpdate();
     }
 
     @AfterEach
     public void cleanUp() throws SQLException {
         PreparedStatement sql = connection.prepareStatement(
-                "DELETE FROM public.country WHERE id = ?"
+                "DELETE FROM country WHERE id = ?"
         );
         sql.setInt(1, testCountryId);
         sql.executeUpdate();
@@ -102,7 +105,7 @@ public class CountryApiTests {
     @Test
     @DisplayName("Update existed country")
     public void checkCountryUpdatedSuccessfully() {
-        given(testCountryUpdateRequest)
+        given(countryUpdateRequest)
                 .when()
                 .put(COUNTRY_PATH, testCountryId)
                 .then()
@@ -114,7 +117,7 @@ public class CountryApiTests {
     @DisplayName("Update nonexistent country")
     public void checkCountryUpdatedUnsuccessfully() throws SQLException {
         cleanUp();
-        given(testCountryUpdateRequest)
+        given(countryUpdateRequest)
                 .when()
                 .put(COUNTRY_PATH, testCountryId)
                 .then()
